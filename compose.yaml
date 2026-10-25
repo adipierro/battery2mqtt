@@ -1,0 +1,28 @@
+services:
+  battery2mqtt:
+    build: .
+    restart: unless-stopped
+    environment:
+      MQTT_BROKER_HOST: ${MQTT_BROKER_HOST}
+      # An empty value lets the app choose 1883, or 8883 when TLS is enabled.
+      MQTT_BROKER_PORT: ${MQTT_BROKER_PORT:-}
+      MQTT_BROKER_TLS: ${MQTT_BROKER_TLS:-false}
+      MQTT_DEVICE_NAME: ${MQTT_DEVICE_NAME:-}
+      MQTT_DEVICE_NAME_FILE: /host/etc/hostname
+      MQTT_TOPIC_PREFIX: ${MQTT_TOPIC_PREFIX:-data}
+      HOME_ASSISTANT_DISCOVERY_ENABLED: ${HOME_ASSISTANT_DISCOVERY_ENABLED:-true}
+      HOME_ASSISTANT_DISCOVERY_PREFIX: ${HOME_ASSISTANT_DISCOVERY_PREFIX:-homeassistant}
+      MQTT_BROKER_USERNAME_FILE: /run/secrets/mqtt_username
+      MQTT_BROKER_PASSWORD_FILE: /run/secrets/mqtt_password
+    secrets:
+      - mqtt_username
+      - mqtt_password
+    volumes:
+      - /sys/class/power_supply:/sys/class/power_supply:ro
+      - /etc/hostname:/host/etc/hostname:ro
+
+secrets:
+  mqtt_username:
+    file: ./secrets/mqtt_username
+  mqtt_password:
+    file: ./secrets/mqtt_password
