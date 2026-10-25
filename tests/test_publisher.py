@@ -2,11 +2,12 @@ import json
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
+from unittest.mock import patch
 
 import paho.mqtt.client as mqtt
 
 from config import Config
-from script import BatteryPublisher
+from script import BatteryPublisher, drop_privileges
 
 
 class PublishInfo:
@@ -36,6 +37,36 @@ class PublisherTests(unittest.TestCase):
         self.publisher._read_battery = Mock(
             return_value=SimpleNamespace(percent=72.6, power_plugged=True)
         )
+
+    @patch("script.os.environ", {})
+    @patch("script.os.umask")
+    @patch("script.os.setuid")
+    @patch("script.os.setgid")
+    @patch("script.os.initgroups")
+    @patch("script.pwd.getpwnam")
+    @patch("script.os.geteuid", return_value=0)
+    def test_startup_drops_root_privileges_after_reading_secrets(
+        self,
+        get_euid,
+        get_user,
+        initgroups,
+        set_gid,
+        set_uid,
+        umask,
+    ):
+        get_user.return_value = SimpleNamespace(
+            pw_uid=10001,
+            pw_gid=10001,
+            pw_dir="/app",
+        )
+
+        drop_privileges("battery2mqtt")
+
+        get_user.assert_called_once_with("battery2mqtt")
+        initgroups.assert_called_once_with("battery2mqtt", 10001)
+        set_gid.assert_called_once_with(10001)
+        set_uid.assert_called_once_with(10001)
+        umask.assert_called_once_with(0o077)
 
     def test_initial_sample_publishes_full_confirmed_snapshot(self):
         self.publisher.client.publish = Mock(return_value=PublishInfo())

@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import pwd
 import signal
 import sys
 import threading
@@ -18,6 +20,25 @@ from config import Config, ConfigError
 
 
 LOGGER = logging.getLogger("battery2mqtt")
+
+
+def drop_privileges(user_name: Optional[str]) -> None:
+    """Permanently switch from root to the configured service account."""
+    if not user_name or os.geteuid() != 0:
+        return
+
+    try:
+        account = pwd.getpwnam(user_name)
+    except KeyError as exc:
+        raise RuntimeError(f"Service account {user_name!r} does not exist") from exc
+
+    os.initgroups(user_name, account.pw_gid)
+    os.setgid(account.pw_gid)
+    os.setuid(account.pw_uid)
+    os.umask(0o077)
+    os.environ["HOME"] = account.pw_dir
+    os.environ["USER"] = user_name
+    os.environ["LOGNAME"] = user_name
 
 
 class BatteryPublisher:
@@ -298,9 +319,13 @@ class BatteryPublisher:
 
 def main() -> int:
     try:
+        # Compose file-backed secrets retain their host ownership and mode. The
+        # container therefore reads configuration before dropping privileges;
+        # no network or MQTT work happens while privileged.
         config = Config.from_env()
-    except ConfigError as exc:
-        print(f"Configuration error: {exc}", file=sys.stderr, flush=True)
+        drop_privileges(os.environ.get("BATTERY2MQTT_RUN_AS_USER"))
+    except (ConfigError, RuntimeError, OSError) as exc:
+        print(f"Startup error: {exc}", file=sys.stderr, flush=True)
         return 2
 
     logging.basicConfig(

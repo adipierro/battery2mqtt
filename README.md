@@ -52,9 +52,11 @@ docker compose logs -f battery2mqtt
 ```
 
 The Compose file mounts `/sys/class/power_supply` and `/etc/hostname` read-only
-so the container can read the host battery and stable hostname. The application
-runs as an unprivileged user and does not need privileged mode or access to the
-Docker socket.
+so the container can read the host battery and stable hostname. At startup, the
+container reads the explicitly granted file-backed secrets and immediately drops
+permanently to the unprivileged `battery2mqtt` user before configuring MQTT or
+opening a network connection. It does not need privileged mode or access to the
+Docker socket. The host secret files can remain mode `0600`.
 
 For a broker without authentication, remove the two credential `_FILE`
 environment entries, the service-level `secrets` list, and the top-level
